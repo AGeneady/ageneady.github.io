@@ -1,0 +1,116 @@
+import React, { useEffect, useState } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Table, TableHeader, TableRow, TableCell, TableBody } from "@/components/ui/table";
+import { format } from "date-fns";
+
+const mainCurrencies = ["EGP", "KES", "EUR", "GBP", "INR", "LYD", "GHS", "SDG"];
+const quarters = {
+  Q1: ["Jan", "Feb", "Mar"],
+  Q2: ["Apr", "May", "Jun"],
+  Q3: ["Jul", "Aug", "Sep"],
+  Q4: ["Oct", "Nov", "Dec"],
+};
+
+export default function CurrencyRatesPage() {
+  const [ratesData, setRatesData] = useState({});
+  const [customCurrency, setCustomCurrency] = useState("");
+  const [customRates, setCustomRates] = useState({});
+
+  useEffect(() => {
+    // Simulated fetch logic
+    const fetchRates = async () => {
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const response = await fetch(`/api/rates?year=${currentYear}`);
+      const data = await response.json();
+      setRatesData(data.main);
+      setCustomRates(data.custom);
+    };
+
+    fetchRates();
+  }, []);
+
+  const handleCustomCurrency = async (code) => {
+    setCustomCurrency(code.toUpperCase());
+    const response = await fetch(`/api/rates/custom?currency=${code}`);
+    const data = await response.json();
+    setCustomRates({ [code.toUpperCase()]: data });
+  };
+
+  const renderQuarterAverages = (monthlyRates) => {
+    const grouped = { Q1: [], Q2: [], Q3: [], Q4: [] };
+    Object.entries(monthlyRates).forEach(([month, value]) => {
+      for (let [q, months] of Object.entries(quarters)) {
+        if (months.includes(month)) {
+          grouped[q].push(value);
+        }
+      }
+    });
+    const averages = {};
+    for (let q in grouped) {
+      const arr = grouped[q];
+      averages[q] = arr.length ? (arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(2) : "-";
+    }
+    return averages;
+  };
+
+  const renderRatesTable = (title, data) => (
+    <Card className="mb-4">
+      <CardContent>
+        <h2 className="text-xl font-semibold mb-2">{title}</h2>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableCell>Currency</TableCell>
+              {Object.values(quarters).flat().map((m) => (
+                <TableCell key={m}>{m}</TableCell>
+              ))}
+              {Object.keys(quarters).map((q) => (
+                <TableCell key={q}>{q} Avg</TableCell>
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {Object.entries(data).map(([code, monthlyRates]) => {
+              const qAvg = renderQuarterAverages(monthlyRates);
+              return (
+                <TableRow key={code}>
+                  <TableCell>{code}</TableCell>
+                  {Object.values(quarters).flat().map((m) => (
+                    <TableCell key={m}>{monthlyRates[m] ?? "-"}</TableCell>
+                  ))}
+                  {Object.keys(quarters).map((q) => (
+                    <TableCell key={q}>{qAvg[q]}</TableCell>
+                  ))}
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+
+  return (
+    <div className="p-6 max-w-7xl mx-auto">
+      <h1 className="text-2xl font-bold mb-4">Currency Rates vs USD</h1>
+
+      {renderRatesTable("Main Currencies (Against USD)", ratesData)}
+
+      <div className="mb-6">
+        <h2 className="text-lg font-semibold mb-2">Check Other Currencies</h2>
+        <Input
+          type="text"
+          placeholder="Enter Currency Code (e.g. JPY)"
+          value={customCurrency}
+          onChange={(e) => handleCustomCurrency(e.target.value)}
+          className="w-64"
+        />
+      </div>
+
+      {Object.keys(customRates).length > 0 &&
+        renderRatesTable(`Custom Currency: ${customCurrency}`, customRates)}
+    </div>
+  );
+}
